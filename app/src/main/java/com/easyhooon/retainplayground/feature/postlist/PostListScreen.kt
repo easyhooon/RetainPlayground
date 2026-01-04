@@ -1,27 +1,29 @@
 package com.easyhooon.retainplayground.feature.postlist
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.retain.retain
+import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,7 +36,6 @@ import com.easyhooon.retainplayground.model.samplePosts
 @Immutable
 data class PostListUiState(
     val posts: List<Post> = emptyList(),
-    val loadCount: Int = 0, // 데이터 로드 횟수 (retain 효과 확인용)
 )
 
 /**
@@ -46,30 +47,11 @@ sealed interface PostListUiEvent {
 
 /**
  * 순수 Composable Presenter 함수
- * - ViewModel 없이 순수 Composable 함수로 상태를 관리
- * - retain을 사용하여 Navigation 백스택에서 제거되어도 상태 유지
  */
 @Composable
-fun postListPresenter(): PostListUiState {
-    // retain을 사용하여 로드 카운트 유지
-    // 화면 회전이나 네비게이션으로 돌아와도 값이 유지됨
-    val loadCount by retain {
-        Log.d("PostListPresenter", "Initial load - creating mutableIntStateOf")
-        mutableIntStateOf(1)
-    }
-
-    // retain을 사용하여 posts 데이터 캐싱
-    // 실제 앱에서는 여기서 API 호출 결과를 캐싱할 수 있음
-    val posts = retain {
-        Log.d("PostListPresenter", "Loading posts data (retain)")
-        // 여기서 네트워크 요청이나 DB 조회를 시뮬레이션
-        samplePosts
-    }
-
-    return PostListUiState(
-        posts = posts,
-        loadCount = loadCount,
-    )
+fun postListPresenter(): Pair<PostListUiState, Unit> {
+    val posts = samplePosts
+    return PostListUiState(posts = posts) to Unit
 }
 
 /**
@@ -79,6 +61,7 @@ fun postListPresenter(): PostListUiState {
 @Composable
 fun PostListScreen(
     uiState: PostListUiState,
+    likeCounts: SnapshotStateMap<Long, Int>,
     onEvent: (PostListUiEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -89,7 +72,7 @@ fun PostListScreen(
                     Column {
                         Text("게시글 목록")
                         Text(
-                            text = "로드 횟수: ${uiState.loadCount} (retain으로 유지됨)",
+                            text = "상세에서 좋아요 누르고 돌아와도 유지됨",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -112,6 +95,7 @@ fun PostListScreen(
             ) { post ->
                 PostItem(
                     post = post,
+                    likeCount = likeCounts[post.id] ?: 0,
                     onClick = { onEvent(PostListUiEvent.OnPostClick(post.id)) }
                 )
             }
@@ -122,6 +106,7 @@ fun PostListScreen(
 @Composable
 private fun PostItem(
     post: Post,
+    likeCount: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -146,11 +131,34 @@ private fun PostItem(
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = "${post.author} | ${post.createdAt}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${post.author} | ${post.createdAt}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                if (likeCount > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            text = "$likeCount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
         }
     }
 }
