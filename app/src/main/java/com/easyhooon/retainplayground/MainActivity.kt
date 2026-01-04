@@ -6,25 +6,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.retain.retain
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSerializable
+import androidx.compose.runtime.retain.retain
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import androidx.savedstate.compose.serialization.serializers.SnapshotStateListSerializer
 import com.easyhooon.retainplayground.common.rememberEventFlow
-import com.easyhooon.retainplayground.navigation.AppRoute
+import com.easyhooon.retainplayground.di.AppGraph
+import dev.zacsweers.metro.createGraph
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailScreen
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailUiEvent
-import com.easyhooon.retainplayground.feature.postdetail.postDetailPresenter
 import com.easyhooon.retainplayground.feature.postlist.PostListScreen
 import com.easyhooon.retainplayground.feature.postlist.PostListUiEvent
-import com.easyhooon.retainplayground.feature.postlist.postListPresenter
 import com.easyhooon.retainplayground.navigation.PostDetailRoute
 import com.easyhooon.retainplayground.navigation.PostListRoute
 import com.easyhooon.retainplayground.ui.theme.RetainPlaygroundTheme
@@ -44,6 +40,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun PostApp(modifier: Modifier = Modifier) {
+    // Metro DependencyGraph 생성 (앱 전체에서 싱글톤으로 사용)
+    val graph = retain { createGraph<AppGraph>() }
+
     val backStack = rememberNavBackStack(PostListRoute)
 
     // retain vs remember 차이점:
@@ -60,7 +59,8 @@ fun PostApp(modifier: Modifier = Modifier) {
         modifier = modifier,
         entryProvider = entryProvider {
             entry<PostListRoute> {
-                val uiState = postListPresenter()
+                // Metro가 생성한 Presenter 함수 호출
+                val uiState = graph.postListPresenter()
                 PostListScreen(
                     uiState = uiState,
                     likeCounts = likeCounts,
@@ -82,7 +82,8 @@ fun PostApp(modifier: Modifier = Modifier) {
                 val eventFlow = rememberEventFlow<PostDetailUiEvent>()
                 val scope = rememberCoroutineScope()
 
-                val uiState = postDetailPresenter(
+                // Metro가 생성한 Presenter 함수 호출 (@Assisted 파라미터 전달)
+                val uiState = graph.postDetailPresenter(
                     postId = postId,
                     likeCount = likeCount,
                     eventFlow = eventFlow,
@@ -104,9 +105,12 @@ fun PostApp(modifier: Modifier = Modifier) {
 
 /**
  * KMP: rememberSerializable + SnapshotStateListSerializer (NavKey 불필요)
+ * Metro DI 사용 버전
  */
 //@Composable
 //fun PostAppKmp(modifier: Modifier = Modifier) {
+//    val graph = retain { createGraph<AppGraph>() }
+//
 //    val backStack: MutableList<AppRoute> =
 //        rememberSerializable(serializer = SnapshotStateListSerializer()) {
 //            mutableStateListOf(PostListRoute)
@@ -121,7 +125,7 @@ fun PostApp(modifier: Modifier = Modifier) {
 //        modifier = modifier,
 //        entryProvider = entryProvider {
 //            entry<PostListRoute> {
-//                val uiState = postListPresenter()
+//                val uiState = graph.postListPresenter()
 //                PostListScreen(
 //                    uiState = uiState,
 //                    likeCounts = likeCounts,
@@ -142,7 +146,7 @@ fun PostApp(modifier: Modifier = Modifier) {
 //                val eventFlow = rememberEventFlow<PostDetailUiEvent>()
 //                val scope = rememberCoroutineScope()
 //
-//                val uiState = postDetailPresenter(
+//                val uiState = graph.postDetailPresenter(
 //                    postId = postId,
 //                    likeCount = likeCount,
 //                    eventFlow = eventFlow,

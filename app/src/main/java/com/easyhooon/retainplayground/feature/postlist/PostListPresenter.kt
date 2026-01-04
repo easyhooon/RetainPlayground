@@ -2,8 +2,9 @@ package com.easyhooon.retainplayground.feature.postlist
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import com.easyhooon.retainplayground.data.PostRepository
 import com.easyhooon.retainplayground.model.Post
-import com.easyhooon.retainplayground.model.samplePosts
+import dev.zacsweers.metro.Inject
 
 /**
  * PostList의 UI 상태
@@ -21,10 +22,17 @@ sealed interface PostListUiEvent {
 }
 
 /**
- * 순수 Composable Presenter 함수
+ * Composable Presenter (Metro DI)
+ * - PostRepository는 Metro가 자동 주입
+ * - operator fun invoke()로 함수처럼 호출 가능: graph.postListPresenter()
  */
-@Composable
-fun postListPresenter(): PostListUiState {
-    val posts = samplePosts
-    return PostListUiState(posts = posts)
+@Inject
+class PostListPresenter(
+    private val postRepository: PostRepository,
+) {
+    @Composable
+    operator fun invoke(): PostListUiState {
+        val posts = postRepository.getPosts()
+        return PostListUiState(posts = posts)
+    }
 }
