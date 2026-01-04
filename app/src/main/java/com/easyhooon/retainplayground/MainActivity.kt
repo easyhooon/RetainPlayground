@@ -6,10 +6,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.ui.Modifier
-import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.EntryProviderScope
+import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
+import androidx.savedstate.compose.serialization.serializers.SnapshotStateListSerializer
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailScreen
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailUiEvent
 import com.easyhooon.retainplayground.feature.postdetail.postDetailPresenter
@@ -35,45 +37,48 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun PostApp(modifier: Modifier = Modifier) {
-    // Navigation3 BackStack
-    val backStack = remember { mutableStateListOf<AppRoute>(PostListRoute) }
+    val backStack: MutableList<AppRoute> =
+        rememberSerializable(serializer = SnapshotStateListSerializer()) {
+            mutableStateListOf(PostListRoute)
+        }
 
     NavDisplay(
         backStack = backStack,
         modifier = modifier,
-        onBack = { backStack.removeLastOrNull() },
-        entryProvider = { key ->
-            when (key) {
-                is PostListRoute -> NavEntry(key) {
-                    val uiState = postListPresenter()
+        entryProvider = entryProvider {
+            screens(backStack)
+        },
+    )
+}
 
-                    PostListScreen(
-                        uiState = uiState,
-                        onEvent = { event ->
-                            when (event) {
-                                is PostListUiEvent.OnPostClick -> {
-                                    backStack.add(PostDetailRoute(event.postId))
-                                }
-                            }
-                        }
-                    )
-                }
+private fun EntryProviderScope<AppRoute>.screens(backStack: MutableList<AppRoute>) {
+    entry<PostListRoute> {
+        val uiState = postListPresenter()
 
-                is PostDetailRoute -> NavEntry(key) {
-                    val uiState = postDetailPresenter(key.postId)
-
-                    PostDetailScreen(
-                        uiState = uiState,
-                        onEvent = { event ->
-                            when (event) {
-                                PostDetailUiEvent.OnBackClick -> {
-                                    backStack.removeLastOrNull()
-                                }
-                            }
-                        }
-                    )
+        PostListScreen(
+            uiState = uiState,
+            onEvent = { event ->
+                when (event) {
+                    is PostListUiEvent.OnPostClick -> {
+                        backStack.add(PostDetailRoute(event.postId))
+                    }
                 }
             }
-        }
-    )
+        )
+    }
+
+    entry<PostDetailRoute> {
+        val uiState = postDetailPresenter(it.postId)
+
+        PostDetailScreen(
+            uiState = uiState,
+            onEvent = { event ->
+                when (event) {
+                    PostDetailUiEvent.OnBackClick -> {
+                        backStack.removeLastOrNull()
+                    }
+                }
+            }
+        )
+    }
 }
