@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.retain.retain
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
@@ -16,6 +17,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import androidx.savedstate.compose.serialization.serializers.SnapshotStateListSerializer
+import com.easyhooon.retainplayground.common.rememberEventFlow
 import com.easyhooon.retainplayground.navigation.AppRoute
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailScreen
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailUiEvent
@@ -26,6 +28,7 @@ import com.easyhooon.retainplayground.feature.postlist.postListPresenter
 import com.easyhooon.retainplayground.navigation.PostDetailRoute
 import com.easyhooon.retainplayground.navigation.PostListRoute
 import com.easyhooon.retainplayground.ui.theme.RetainPlaygroundTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +60,7 @@ fun PostApp(modifier: Modifier = Modifier) {
         modifier = modifier,
         entryProvider = entryProvider {
             entry<PostListRoute> {
-                val (uiState, _) = postListPresenter()
+                val uiState = postListPresenter()
                 PostListScreen(
                     uiState = uiState,
                     likeCounts = likeCounts,
@@ -74,21 +77,25 @@ fun PostApp(modifier: Modifier = Modifier) {
             entry<PostDetailRoute> {
                 val postId = it.postId
                 val likeCount = likeCounts[postId] ?: 0
-                val uiState = postDetailPresenter(postId, likeCount)
+
+                // EventFlow: 이벤트를 presenter로 전달하는 채널
+                val eventFlow = rememberEventFlow<PostDetailUiEvent>()
+                val scope = rememberCoroutineScope()
+
+                val uiState = postDetailPresenter(
+                    postId = postId,
+                    likeCount = likeCount,
+                    eventFlow = eventFlow,
+                    onBackClick = { backStack.removeLastOrNull() },
+                    onLikeClick = {
+                        likeCounts[postId] = (likeCounts[postId] ?: 0) + 1
+                        Log.d("PostApp", "Like clicked for post $postId: ${likeCounts[postId]}")
+                    },
+                )
 
                 PostDetailScreen(
                     uiState = uiState,
-                    onEvent = { event ->
-                        when (event) {
-                            PostDetailUiEvent.OnBackClick -> {
-                                backStack.removeLastOrNull()
-                            }
-                            PostDetailUiEvent.OnLikeClick -> {
-                                likeCounts[postId] = (likeCounts[postId] ?: 0) + 1
-                                Log.d("PostApp", "Like clicked for post $postId: ${likeCounts[postId]}")
-                            }
-                        }
-                    }
+                    onEvent = { event -> scope.launch { eventFlow.emit(event) } },
                 )
             }
         },
@@ -114,7 +121,7 @@ fun PostApp(modifier: Modifier = Modifier) {
 //        modifier = modifier,
 //        entryProvider = entryProvider {
 //            entry<PostListRoute> {
-//                val (uiState, _) = postListPresenter()
+//                val uiState = postListPresenter()
 //                PostListScreen(
 //                    uiState = uiState,
 //                    likeCounts = likeCounts,
@@ -131,20 +138,21 @@ fun PostApp(modifier: Modifier = Modifier) {
 //            entry<PostDetailRoute> {
 //                val postId = it.postId
 //                val likeCount = likeCounts[postId] ?: 0
-//                val uiState = postDetailPresenter(postId, likeCount)
+//
+//                val eventFlow = rememberEventFlow<PostDetailUiEvent>()
+//                val scope = rememberCoroutineScope()
+//
+//                val uiState = postDetailPresenter(
+//                    postId = postId,
+//                    likeCount = likeCount,
+//                    eventFlow = eventFlow,
+//                    onBackClick = { backStack.removeLastOrNull() },
+//                    onLikeClick = { likeCounts[postId] = (likeCounts[postId] ?: 0) + 1 },
+//                )
 //
 //                PostDetailScreen(
 //                    uiState = uiState,
-//                    onEvent = { event ->
-//                        when (event) {
-//                            PostDetailUiEvent.OnBackClick -> {
-//                                backStack.removeLastOrNull()
-//                            }
-//                            PostDetailUiEvent.OnLikeClick -> {
-//                                likeCounts[postId] = (likeCounts[postId] ?: 0) + 1
-//                            }
-//                        }
-//                    }
+//                    onEvent = { event -> scope.launch { eventFlow.emit(event) } },
 //                )
 //            }
 //        },

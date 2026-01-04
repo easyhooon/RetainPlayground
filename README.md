@@ -34,6 +34,47 @@ val count = retain { mutableStateOf(0) }
 | **보일러플레이트** | 많음 | 적음 |
 | **프로세스 종료** | SavedStateHandle 필요 | 유지 안됨 |
 
+### retain 관련 API
+
+#### 1. `retain` - 상태 유지
+```kotlin
+val player = retain {
+    ExoPlayer.Builder(context).build()
+}
+```
+
+#### 2. `RetainedEffect` - retain 수명 주기 side effect
+`DisposableEffect`의 retain 버전입니다. composition을 떠날 때가 아니라 **진짜 retire될 때만** 정리됩니다.
+
+```kotlin
+val player = retain(mediaUri) { MediaPlayer(mediaUri) }
+
+// player가 retain될 때 초기화, retire될 때만 정리
+RetainedEffect(player) {
+    player.initialize()  // 최초 retain 시 실행
+    onRetire {
+        player.close()  // 백스택에서 완전히 제거될 때만 실행
+    }
+}
+```
+
+| | DisposableEffect | RetainedEffect |
+|---|---|---|
+| **정리 시점** | composition 떠날 때 | 백스택에서 완전히 제거될 때 |
+| **화면 회전** | dispose → 다시 setup | 유지됨 (정리 안됨) |
+| **사용 위치** | Composable 내부 | Composable 내부 (key 필수) |
+| **정리 함수** | `onDispose { }` | `onRetire { }` |
+
+#### 3. `@DoNotRetain` - retain 금지 어노테이션
+메모리 누수 위험이 있는 클래스에 사용합니다.
+
+```kotlin
+@DoNotRetain
+class MyManagedClass  // 이 클래스는 retain 불가
+```
+
+**retain 금지 대상**: Activity, View, Fragment, ViewModel, Context, Lifecycle
+
 ## Navigation3 BackStack 관리
 
 ### Android 전용 방식
@@ -81,35 +122,94 @@ val backStack: MutableList<AppRoute> =
 
 ## 순수 Composable Presenter 패턴
 
-ViewModel 없이 순수 `@Composable` 함수로 상태를 관리합니다.
+ViewModel 없이 순수 `@Composable` 함수로 상태를 관리합니다. (DroidKaigi 스타일)
+
+### EventFlow & EventEffect (DroidKaigi 스타일)
+
+이벤트 처리를 presenter 내부에서 담당합니다.
+
+```kotlin
+// EventFlow 유틸리티 (common/EventEffect.kt)
+typealias EventFlow<T> = MutableSharedFlow<T>
+
+@Composable
+fun <T> rememberEventFlow(): EventFlow<T> {
+    return remember { MutableSharedFlow(extraBufferCapacity = 20) }
+}
+
+@Composable
+fun <EVENT> EventEffect(
+    eventFlow: EventFlow<EVENT>,
+    block: suspend CoroutineScope.(event: EVENT) -> Unit,
+) {
+    LaunchedEffect(eventFlow) {
+        supervisorScope {
+            eventFlow.collect { event ->
+                launch { block(event) }
+            }
+        }
+    }
+}
+```
+
+### Presenter 구현
 
 ```kotlin
 @Composable
-fun postDetailPresenter(postId: Long, likeCount: Int): PostDetailUiState {
-    val post = samplePosts.find { it.id == postId }
-    return PostDetailUiState(post = post, likeCount = likeCount)
+fun postDetailPresenter(
+    postId: Long,
+    likeCount: Int,
+    eventFlow: EventFlow<PostDetailUiEvent>,  // 이벤트 수신
+    onBackClick: () -> Unit,
+    onLikeClick: () -> Unit,
+): PostDetailUiState {
+    var commentDraft by retain(postId) { mutableStateOf("") }
+
+    // 이벤트 처리를 presenter 내부에서 담당
+    EventEffect(eventFlow) { event ->
+        when (event) {
+            is PostDetailUiEvent.OnBackClick -> onBackClick()
+            is PostDetailUiEvent.OnLikeClick -> onLikeClick()
+            is PostDetailUiEvent.OnCommentDraftChange -> {
+                commentDraft = event.text  // 내부 상태 직접 업데이트
+            }
+        }
+    }
+
+    return PostDetailUiState(post = post, likeCount = likeCount, commentDraft = commentDraft)
+}
+```
+
+### 사용 방법
+
+```kotlin
+entry<PostDetailRoute> {
+    val eventFlow = rememberEventFlow<PostDetailUiEvent>()
+    val scope = rememberCoroutineScope()
+
+    val uiState = postDetailPresenter(
+        postId = it.postId,
+        likeCount = likeCounts[it.postId] ?: 0,
+        eventFlow = eventFlow,
+        onBackClick = { backStack.removeLastOrNull() },
+        onLikeClick = { likeCounts[it.postId] = (likeCounts[it.postId] ?: 0) + 1 },
+    )
+
+    PostDetailScreen(
+        uiState = uiState,
+        onEvent = { event -> scope.launch { eventFlow.emit(event) } },
+    )
 }
 ```
 
 ### ViewModel과의 차이점
 
-**ViewModel 방식** (자동 주입):
-```kotlin
-class DetailViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
-    val postId: Long = savedStateHandle["postId"]!!
-}
-```
-
-**Composable Presenter 방식** (명시적 전달):
-```kotlin
-entry<PostDetailRoute> {
-    val postId = it.postId  // Route에서 꺼내서
-    val uiState = postDetailPresenter(postId, likeCount)  // 직접 전달
-}
-```
-
-- **장점**: 모든 의존성이 명시적, 테스트 쉬움
-- **단점**: 자동 주입 없음, 직접 전달해야 함
+| | ViewModel | Composable Presenter |
+|---|---|---|
+| **상태 범위** | Activity/Fragment | NavEntry (백스택) |
+| **의존성 주입** | Hilt 등으로 자동 | 명시적 전달 |
+| **이벤트 처리** | 외부에서 호출 | EventEffect로 내부 처리 |
+| **테스트** | Mock 필요 | 순수 함수로 쉬움 |
 
 ## Navigation3 Argument 전달
 
@@ -146,13 +246,17 @@ val map = mutableStateMapOf<Long, Int>()
 ```
 app/src/main/java/com/easyhooon/retainplayground/
 ├── MainActivity.kt                 # Navigation3 + retain 설정
+├── common/
+│   └── EventEffect.kt              # EventFlow, EventEffect (DroidKaigi 스타일)
 ├── navigation/
 │   └── NavKeys.kt                  # Route 정의
 ├── feature/
 │   ├── postlist/
-│   │   └── PostListScreen.kt       # 목록 화면 + Presenter
+│   │   ├── PostListPresenter.kt    # UiState, UiEvent, Presenter
+│   │   └── PostListScreen.kt       # 목록 화면 UI
 │   └── postdetail/
-│       └── PostDetailScreen.kt     # 상세 화면 + Presenter
+│       ├── PostDetailPresenter.kt  # UiState, UiEvent, Presenter + RetainedEffect
+│       └── PostDetailScreen.kt     # 상세 화면 UI
 ├── model/
 │   └── Post.kt                     # 데이터 모델
 └── ui/theme/                       # 테마
@@ -166,7 +270,9 @@ app/src/main/java/com/easyhooon/retainplayground/
 
 ## 참고 자료
 
+- [Compose 상태 수명 공식 문서](https://developer.android.com/develop/ui/compose/state-lifespans?hl=ko)
 - [Compose Retain API 블로그](https://velog.io/@mraz3068/Compose-Retain-API)
 - [Navigation3 공식 문서](https://developer.android.com/jetpack/androidx/releases/navigation3)
 - [KotlinConf App](https://github.com/JetBrains/kotlinconf-app)
 - [DroidKaigi 2025 App](https://github.com/DroidKaigi/conference-app-2025)
+- [RetainedEffect 소개 - droidcon](https://www.droidcon.com/2025/08/18/previewing-retainedeffect-a-new-side-effect-to-bridge-between-composition-and-retention-lifecycles/)

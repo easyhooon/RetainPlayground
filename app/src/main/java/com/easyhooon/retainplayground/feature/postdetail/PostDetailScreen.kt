@@ -21,46 +21,14 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.easyhooon.retainplayground.model.Post
-import com.easyhooon.retainplayground.model.samplePosts
-
-/**
- * PostDetail의 UI 상태
- */
-@Immutable
-data class PostDetailUiState(
-    val post: Post? = null,
-    val likeCount: Int = 0,
-)
-
-/**
- * PostDetail의 UI 이벤트
- */
-sealed interface PostDetailUiEvent {
-    data object OnBackClick : PostDetailUiEvent
-    data object OnLikeClick : PostDetailUiEvent
-}
-
-/**
- * 순수 Composable Presenter 함수
- */
-@Composable
-fun postDetailPresenter(postId: Long, likeCount: Int): PostDetailUiState {
-    val post = samplePosts.find { it.id == postId }
-
-    return PostDetailUiState(
-        post = post,
-        likeCount = likeCount,
-    )
-}
 
 /**
  * PostDetail 화면
@@ -162,7 +130,35 @@ fun PostDetailScreen(
                     style = MaterialTheme.typography.bodyLarge,
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 댓글 입력 필드 - retain으로 화면 회전해도 유지
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "댓글 작성 (retain으로 화면 회전해도 유지)",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        OutlinedTextField(
+                            value = uiState.commentDraft,
+                            onValueChange = { onEvent(PostDetailUiEvent.OnCommentDraftChange(it)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("댓글을 입력하세요...") },
+                            minLines = 2,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // 설명
                 Card(
@@ -181,9 +177,10 @@ fun PostDetailScreen(
                         )
                         Text(
                             text = "1. 좋아요 버튼을 여러 번 눌러보세요.\n" +
-                                "2. 뒤로가기로 목록으로 돌아가세요.\n" +
-                                "3. 같은 게시글을 다시 클릭하면 좋아요가 유지됩니다.\n" +
-                                "4. 화면 회전해도 유지됩니다.",
+                                "2. 댓글 입력란에 텍스트를 입력하세요.\n" +
+                                "3. 화면을 회전해보세요 → 모두 유지됩니다!\n" +
+                                "4. 뒤로가기 후 다시 와도 유지됩니다.\n" +
+                                "5. Logcat에서 RetainedEffect 로그를 확인하세요.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

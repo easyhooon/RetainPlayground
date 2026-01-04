@@ -21,38 +21,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.easyhooon.retainplayground.model.Post
-import com.easyhooon.retainplayground.model.samplePosts
-
-/**
- * PostList의 UI 상태
- */
-@Immutable
-data class PostListUiState(
-    val posts: List<Post> = emptyList(),
-)
-
-/**
- * PostList의 UI 이벤트
- */
-sealed interface PostListUiEvent {
-    data class OnPostClick(val postId: Long) : PostListUiEvent
-}
-
-/**
- * 순수 Composable Presenter 함수
- */
-@Composable
-fun postListPresenter(): Pair<PostListUiState, Unit> {
-    val posts = samplePosts
-    return PostListUiState(posts = posts) to Unit
-}
 
 /**
  * PostList 화면
