@@ -22,17 +22,16 @@ sealed interface PostListUiEvent {
 }
 
 /**
- * Composable Presenter (Metro DI)
- * - PostRepository는 Metro가 자동 주입
- * - operator fun invoke()로 함수처럼 호출 가능: graph.postListPresenter()
+ * Composable Presenter (Metro Top-level Function Injection)
+ * - @Inject: Metro가 이 함수를 DI 컨테이너에 등록
+ * - PostRepository: Metro가 자동 주입
+ * - 함수를 직접 호출하면 Metro가 의존성을 해결
  */
 @Inject
-class PostListPresenter(
-    private val postRepository: PostRepository,
-) {
-    @Composable
-    operator fun invoke(): PostListUiState {
-        val posts = postRepository.getPosts()
-        return PostListUiState(posts = posts)
-    }
+@Composable
+fun PostListPresenter(
+    postRepository: PostRepository,
+): PostListUiState {
+    val posts = postRepository.getPosts()
+    return PostListUiState(posts = posts)
 }

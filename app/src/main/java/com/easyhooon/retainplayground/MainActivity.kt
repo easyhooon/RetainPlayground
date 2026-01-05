@@ -17,8 +17,10 @@ import androidx.navigation3.ui.NavDisplay
 import com.easyhooon.retainplayground.common.rememberEventFlow
 import com.easyhooon.retainplayground.di.AppGraph
 import dev.zacsweers.metro.createGraph
+import com.easyhooon.retainplayground.feature.postdetail.PostDetailPresenter
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailScreen
 import com.easyhooon.retainplayground.feature.postdetail.PostDetailUiEvent
+import com.easyhooon.retainplayground.feature.postlist.PostListPresenter
 import com.easyhooon.retainplayground.feature.postlist.PostListScreen
 import com.easyhooon.retainplayground.feature.postlist.PostListUiEvent
 import com.easyhooon.retainplayground.navigation.PostDetailRoute
@@ -59,8 +61,10 @@ fun PostApp(modifier: Modifier = Modifier) {
         modifier = modifier,
         entryProvider = entryProvider {
             entry<PostListRoute> {
-                // Metro가 생성한 Presenter 함수 호출
-                val uiState = graph.postListPresenter()
+                // Metro Top-level Function Injection: Presenter를 직접 호출
+                val uiState = PostListPresenter(
+                    postRepository = graph.postRepository
+                )
                 PostListScreen(
                     uiState = uiState,
                     likeCounts = likeCounts,
@@ -82,8 +86,9 @@ fun PostApp(modifier: Modifier = Modifier) {
                 val eventFlow = rememberEventFlow<PostDetailUiEvent>()
                 val scope = rememberCoroutineScope()
 
-                // Metro가 생성한 Presenter 함수 호출 (@Assisted 파라미터 전달)
-                val uiState = graph.postDetailPresenter(
+                // Metro Top-level Function Injection: Presenter를 직접 호출 (@Assisted 파라미터 전달)
+                val uiState = PostDetailPresenter(
+                    postRepository = graph.postRepository,
                     postId = postId,
                     likeCount = likeCount,
                     eventFlow = eventFlow,

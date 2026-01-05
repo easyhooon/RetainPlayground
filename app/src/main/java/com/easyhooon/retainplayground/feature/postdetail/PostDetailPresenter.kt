@@ -12,6 +12,7 @@ import com.easyhooon.retainplayground.common.EventEffect
 import com.easyhooon.retainplayground.common.EventFlow
 import com.easyhooon.retainplayground.data.PostRepository
 import com.easyhooon.retainplayground.model.Post
+import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.Inject
 
 /**
@@ -34,54 +35,53 @@ sealed interface PostDetailUiEvent {
 }
 
 /**
- * Composable Presenter (Metro DI + DroidKaigi 스타일)
+ * Composable Presenter (Metro Top-level Function Injection)
+ * - @Inject: Metro가 이 함수를 DI 컨테이너에 등록
  * - PostRepository: Metro가 자동 주입
- * - operator fun invoke(): 함수처럼 호출 가능
+ * - @Assisted 파라미터: 런타임에 호출자가 제공
  * - EventFlow/EventEffect: 이벤트 처리
  * - retain/RetainedEffect: 상태 유지
  */
 @Inject
-class PostDetailPresenter(
-    private val postRepository: PostRepository,
-) {
-    @Composable
-    operator fun invoke(
-        postId: Long,
-        likeCount: Int,
-        eventFlow: EventFlow<PostDetailUiEvent>,
-        onBackClick: () -> Unit,
-        onLikeClick: () -> Unit,
-    ): PostDetailUiState {
-        val post = postRepository.getPost(postId)
+@Composable
+fun PostDetailPresenter(
+    postRepository: PostRepository,
+    @Assisted postId: Long,
+    @Assisted likeCount: Int,
+    @Assisted eventFlow: EventFlow<PostDetailUiEvent>,
+    @Assisted onBackClick: () -> Unit,
+    @Assisted onLikeClick: () -> Unit,
+): PostDetailUiState {
 
-        // retain: 댓글 작성 중인 텍스트 - 화면 회전해도 유지됨
-        var commentDraft by retain(postId) {
-            mutableStateOf("")
-        }
+    val post = postRepository.getPost(postId)
 
-        // RetainedEffect: 백스택에서 완전히 제거될 때만 onRetire 실행
-        RetainedEffect(postId) {
-            Log.d("PostDetailPresenter", "RetainedEffect: 게시글 $postId 상세 화면 진입")
-            onRetire {
-                Log.d("PostDetailPresenter", "RetainedEffect onRetire: 게시글 $postId 상세 화면에서 완전히 제거됨")
-            }
-        }
-
-        // EventEffect: 이벤트 구독 및 처리
-        EventEffect(eventFlow) { event ->
-            when (event) {
-                is PostDetailUiEvent.OnBackClick -> onBackClick()
-                is PostDetailUiEvent.OnLikeClick -> onLikeClick()
-                is PostDetailUiEvent.OnCommentDraftChange -> {
-                    commentDraft = event.text
-                }
-            }
-        }
-
-        return PostDetailUiState(
-            post = post,
-            likeCount = likeCount,
-            commentDraft = commentDraft,
-        )
+    // retain: 댓글 작성 중인 텍스트 - 화면 회전해도 유지됨
+    var commentDraft by retain(postId) {
+        mutableStateOf("")
     }
+
+    // RetainedEffect: 백스택에서 완전히 제거될 때만 onRetire 실행
+    RetainedEffect(postId) {
+        Log.d("PostDetailPresenter", "RetainedEffect: 게시글 $postId 상세 화면 진입")
+        onRetire {
+            Log.d("PostDetailPresenter", "RetainedEffect onRetire: 게시글 $postId 상세 화면에서 완전히 제거됨")
+        }
+    }
+
+    // EventEffect: 이벤트 구독 및 처리
+    EventEffect(eventFlow) { event ->
+        when (event) {
+            is PostDetailUiEvent.OnBackClick -> onBackClick()
+            is PostDetailUiEvent.OnLikeClick -> onLikeClick()
+            is PostDetailUiEvent.OnCommentDraftChange -> {
+                commentDraft = event.text
+            }
+        }
+    }
+
+    return PostDetailUiState(
+        post = post,
+        likeCount = likeCount,
+        commentDraft = commentDraft,
+    )
 }
